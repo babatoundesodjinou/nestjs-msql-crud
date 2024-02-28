@@ -5,12 +5,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import * as speakeasy from 'speakeasy';
 import { SignupDto } from './dto/signup.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { MailerService } from 'src/mailer/mailer.service';
 import { SigninDto } from './dto/signin.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { ResetPasswordDemandDto } from './dto/resetPasswordDemand.dto';
 
 @Injectable()
 export class AuthService {
@@ -76,5 +78,26 @@ export class AuthService {
         email: user.email,
       },
     };
+  }
+
+  async resetPasswordDemandDto(resetPasswordDemandDto: ResetPasswordDemandDto) {
+    const { email } = resetPasswordDemandDto;
+    // Vérifier si l'utilisateur est déjà inscrit
+    const user = await this.prismaService.user.findUnique({ where: { email } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const code  = speakeasy.totp({
+        secret: this.configService.get('OTP_CODE'),
+        digits: 5,
+        step: 60 * 10,
+        encoding: 'base32'
+    });
+    const url = "http://localhost:3000/auth/reset-password-confirmation"
+
+    await this.mailerService.sendResetPassword(email, url, code);
+
+    return {data: "Reset password mail has been sent"};
   }
 }
